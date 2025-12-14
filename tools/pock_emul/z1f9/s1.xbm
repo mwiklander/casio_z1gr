@@ -1,0 +1,5 @@
+#define s1_width 8
+#define s1_height 6
+static unsigned char s1_bits[] = {
+	0x78,0x48,0x68,0x58,0x48,0x78
+};

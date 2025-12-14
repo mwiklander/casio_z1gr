@@ -1,0 +1,126 @@
+# Z-1GR / FX-890P (i186 CPU) – things we currently know must be treated specially
+# Purpose: feed into Codex/tooling to drive (a) source linting, (b) preprocessing, (c) fallbacks.
+# Scope: ONLY what we’ve actually observed/confirmed in this project so far.
+
+transport_and_file_format:
+  BASIC_files:
+    file_ext: [".bas", ".BAS"]
+    required_line_endings: "CRLF"         # \r\n
+    must_end_with_newline: true
+    eof_marker: "CTRL-Z (0x1A) recommended for receiver to exit"
+    sender_behavior:
+      - "Normalize all newlines to CRLF before sending"
+      - "Always append final CRLF if missing"
+      - "Send CTRL-Z then pause+flush before closing port"
+  ASM_files:
+    file_ext: [".asm", ".ASM", ".casm", ".CASM"]
+    required_line_endings: "CR"           # \r
+    must_end_with_newline: true           # final CR
+    eof_marker: "CTRL-Z (0x1A) recommended for receiver to exit"
+    required_footer:
+      - "END statement required (otherwise load rejected)"
+    sender_behavior:
+      - "Normalize all newlines to CR-only before sending"
+      - "Always append final CR if missing"
+      - "Send CTRL-Z then pause+flush before closing port"
+  serial_params_on_device:
+    device_context: "F.COM uses selected device profile [RS232C]/[FILE]/[DISK]/[SWITCH]"
+    editable_at_load_prompt: true
+    known_good: 'COM0:7,N,8,1,N,N,N,B,N'  # 9600 baud, no parity, 8N1, no flow control
+    notes:
+      - "CTRL-Z-only test proved link & settings were correct"
+      - "Receiver may store program even if it doesn’t exit; that means EOF marker was missed—fix by flush+pause around CTRL-Z"
+
+basic_language_rules:
+  CALL_hex_syntax:
+    problem: 'Using assembler-style "2000H" in BASIC can fail'
+    prefer:
+      - 'CALL &H2000'
+      - 'CALL(&H2000)  # if dialect requires parentheses'
+  program_slot_model:
+    rule: "Z-1 uses slots P0–P9 per language (BASIC/ASM/CASM/C). LOAD overwrites current slot."
+    workflow_safety:
+      - "Reserve scratch slot P9 for BASIC and ASM during dev"
+
+asm_source_syntax_rules:
+  labels:
+    rule: "Labels require colon"
+    example_ok: "START:"
+  forbid_lines:
+    - token: "DUP"
+      reason: "Assembler rejects/doesn’t support DUP(?) usage seen in sample; remove entire DUP(...) line content"
+  hex_literals:
+    rule: "Leading 0 required when hex literal starts with A–F"
+    example:
+      bad: "A000H"
+      good: "0A000H"
+    suggestion: "Preprocess hex constants: if token matches ^[A-F][0-9A-F]*H$ then prefix '0'"
+  required_footer:
+    rule: "END required for file to load as ASM source"
+  end_return:
+    note: "Use IRET for interrupt-style returns; confirmed working in our beep/keywait tests"
+
+confirmed_instruction_quirks:
+  # These are confirmed by real compilation/run behavior on the Z-1GR assembler.
+  OUT_variants:
+    OUT_DX_AH:
+      status: "REJECTED by Z-1 assembler"
+      suggested_fix:
+        - "MOV AL, AH"
+        - "OUT DX, AL"
+    OUT_DX_AL:
+      status: "ACCEPTED"
+      suggested_fix: "Use this form for 8-bit port writes"
+    OUT_DX_AX:
+      status: "ACCEPTED"
+      suggested_fix: "Use this form for 16-bit port writes when supported/needed"
+  IN_variants:
+    IN_AX_DX:
+      status: "ACCEPTED"
+      suggested_fix: "Use this form where possible (can reduce AX juggling)"
+  IRET:
+    status: "ACCEPTED"
+    suggested_fix: "Use for ISR/interrupt return paths; confirmed working from BASIC CALL harness"
+
+likely_next_instruction_issues_to_classify:
+  # Not confirmed yet; include as TODOs for your linter/preprocessor,
+  # so we can fill in as we discover assembler limitations.
+  shift_and_immediates:
+    examples:
+      - "SHL r/m8, imm8"
+      - "SHL r/m16, imm8"
+    plan:
+      - "If assembler rejects imm shifts, fallback to CL-based shift: MOV CL, n; SHL reg, CL"
+      - "Or expand 'x*2' to ADD reg, reg when safe"
+  80186_only_ops:
+    examples:
+      - "PUSHA/POPA"
+      - "ENTER/LEAVE"
+      - "IMUL r, r/m, imm"
+    plan:
+      - "If rejected, either (A) macro-expand into 8086-safe sequences, or (B) emit opcodes with DB if Z-1 supports DB"
+  opcode_escape_hatch:
+    goal: "Use full CPU despite assembler subset"
+    requirement_to_check: "Does Z-1 assembler support DB/DW (define byte/word)?"
+    plan_if_supported:
+      - "Implement macro: OP(bytes...) => DB xx,yy,zz"
+      - "Maintain opcode table for missing instructions"
+    plan_if_not_supported:
+      - "Prefer Track-B binary loader (NASM on Mac + ML receiver on Z-1) once ready"
+
+recommended_tooling_actions_for_codex:
+  add_repo_linter:
+    name: "z1asm_lint"
+    inputs: [".asm", ".casm"]
+    checks:
+      - "END must exist as final non-empty statement"
+      - "Label lines must end with ':'"
+      - "Flag 'DUP' usage"
+      - "Normalize hex literals starting with A–F to have leading 0"
+      - "Flag OUT DX,AH and auto-suggest MOV AL,AH; OUT DX,AL"
+  keep_sender_as_source_of_truth:
+    name: "send_serial.py"
+    behavior:
+      - "Per-extension EOL normalization (BAS=>CRLF, ASM/CASM=>CR)"
+      - "Always final EOL"
+      - "Flush+pause before/after CTRL-Z"

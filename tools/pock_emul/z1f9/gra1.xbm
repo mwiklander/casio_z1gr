@@ -1,0 +1,5 @@
+#define gra1_width 8
+#define gra1_height 4
+static unsigned char gra1_bits[] = {
+	0x36,0x51,0x35,0x56
+};

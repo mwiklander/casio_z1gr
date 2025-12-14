@@ -1,0 +1,5 @@
+#define deg1_width 8
+#define deg1_height 4
+static unsigned char deg1_bits[] = {
+	0x63,0x15,0x55,0x63
+};

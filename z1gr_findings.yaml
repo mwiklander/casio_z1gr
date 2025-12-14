@@ -1,0 +1,278 @@
+# Casio Z-1GR / FX-890P (iAPX 86/188) reverse-notes
+# Source basis:
+# - z1f9_20210529 emulator sources (files: io.c, memory.c, z1.c, z1.h, conf.c/h, pseudorom.h)
+# - On-device experiments on a physical Casio Z-1GR (BASIC CALL -> ML routine)
+# IMPORTANT: Some emulator-modeled mappings (notably LCD/VRAM @ A0000h) appear to hang real hardware when accessed directly.
+# Last updated: 2025-12-14
+
+meta:
+  device:
+    model: "Casio Z-1GR"
+    family: ["Z-1", "Z-1GR", "FX-890P"]
+    cpu: "Intel 80188-class (TS80L188EB / iAPX 186/188 compatible)"
+  sources:
+    emulator_archive: "z1f9_20210529.tgz"
+    files_used:
+      - "io.c"
+      - "memory.c"
+      - "z1.c"
+      - "z1.h"
+      - "conf.c"
+      - "conf.h"
+      - "pseudorom.h (font table, not ROM call vectors)"
+  confidence_legend:
+    confirmed_on_device: "validated by running code on real Z-1GR"
+    emulator_inferred: "taken from emulator sources; may differ on real hardware"
+    unknown: "not yet verified"
+
+basic_and_ml:
+  memory_allocation:
+    method: "BASIC CLEAR partitions"
+    example:
+      - "CLEAR 2048,2048,6014   # string, assembler, variables"
+    notes:
+      - "User allocates assembler area via CLEAR; ML code lives in that reserved space."
+      - "BASIC/C runtime behavior depends on these partitions."
+  invocation_and_return:
+    entry_method: "BASIC CALL <addr>"
+    return_instruction:
+      required: "IRET"
+      confirmed_on_device: true
+      notes:
+        - "RET/RETF caused hard freeze; IRET returns cleanly to BASIC prompt."
+        - "Implies CALL enters ML through an interrupt-like dispatcher (FLAGS:CS:IP frame)."
+  recovery_when_hung:
+    hardware_reset: "Use rear 'P' button (retains memory) if machine hangs."
+    full_reset: "Use 'ALL RESET' only as last resort (wipes)."
+
+assembler_syntax_constraints:
+  label_format:
+    required_colon_suffix: true
+    example_good: "START:"
+    example_bad: "START"
+    notes:
+      - "Labels without ':' are not accepted (or behave inconsistently)."
+  hex_literal_format:
+    accepted: ["0A000H", "0206H", "3FH"]
+    rejected_or_not_used: ["$A000 (not tested in final workflow)", "A000h (lowercase h)"]
+  addressing_modes:
+    accepted:
+      - "[DI]"
+      - "[BX+SI] (seen in working snippet)"
+    rejected:
+      - "[DI+1] (immediate displacement form rejected on this assembler variant)"
+      - "ES:[0] (segment override with immediate displacement rejected)"
+    workaround_for_odd_address:
+      - "Use INC DI / DEC DI to switch between even/odd offsets when needed."
+  port_io_operands:
+    confirmed_on_device:
+      - "OUT DX,AL"
+      - "OUT DX,AX"
+      - "IN  AX,DX"
+    rejected:
+      - "OUT DX,AH"
+      - "IN  AH,DX"
+    workaround:
+      - "Move AH -> AL before OUT if writing a high byte."
+  segment_registers:
+    notes:
+      - "MOV DS,AX / MOV ES,AX appear to assemble."
+      - "Changing DS and returning without restoring can freeze OS; but in our case VRAM pokes froze even with restores."
+      - "For routines called by BASIC, prefer minimal register/segment disturbance and always exit via IRET."
+
+known_working_on_device_examples:
+  keywait_then_beep:
+    description: "Waits until any key is pressed, then emits a brief tick and returns."
+    status: confirmed_on_device
+    code:
+      - "ORG  2000H"
+      - ""
+      - "START:"
+      - "      MOV  DX,0200H"
+      - "      MOV  AX,0FFFH"
+      - "      OUT  DX,AX"
+      - ""
+      - "WAIT:"
+      - "      MOV  DX,0202H"
+      - "      IN   AX,DX"
+      - "      CMP  AX,8000H"
+      - "      JE   WAIT"
+      - ""
+      - "      MOV  DX,0206H"
+      - "      MOV  AL,03H"
+      - "      OUT  DX,AL"
+      - "      MOV  AL,00H"
+      - "      OUT  DX,AL"
+      - ""
+      - "      IRET"
+    notes:
+      - "Beep is short (tick). Use longer tone by toggling or delaying."
+
+io_ports:
+  keyboard:
+    status: confirmed_on_device_for_basic_polling
+    ports:
+      strobe_mask:
+        addr_hex: "0200H"
+        width: "16-bit (0200/0201)"
+        direction: "OUT"
+        meaning: "Selects which keyboard row-groups are active for scan (bitmask)."
+      matrix_read:
+        addr_hex: "0202H"
+        width: "16-bit (0202/0203)"
+        direction: "IN"
+        meaning: "OR of active rows' matrix words."
+        no_key_signature:
+          value_hex: "8000H"
+          meaning: "Emulator returns 0x8000 when no keys pressed; matches on-device polling behavior."
+    notes:
+      - "Exact row/column-to-physical-key mapping not yet decoded."
+      - "To decode mapping: strobe one bit at a time and observe AX bits when pressing keys."
+  buzzer:
+    status: confirmed_on_device
+    port:
+      addr_hex: "0206H"
+      width: "8-bit"
+      direction: "OUT"
+    bits_emulator_model:
+      bit0_enable: "If 0 -> off; if 1 -> on"
+      bit1_toggle: "When 1, flips polarity (square-wave driver in emulator)"
+    known_values:
+      "03H": "brief tick (enable + toggle)"
+      "00H": "off"
+  timers:
+    status: emulator_inferred
+    notes:
+      - "Not yet confirmed on-device."
+      - "Timer registers appear as 16-bit ports; using OUT DX,AX / IN AX,DX."
+    timer0:
+      counter: { addr_hex: "0030H", width: "16-bit", direction: "R/W? (emulator supports read+write)" }
+      interval_a: { addr_hex: "0032H", width: "16-bit", direction: "R/W" }
+      interval_b: { addr_hex: "0034H", width: "16-bit", direction: "R/W" }
+      control: { addr_hex: "0036H", width: "16-bit", direction: "R/W" }
+    timer1:
+      counter: { addr_hex: "0038H", width: "16-bit", direction: "R/W" }
+      interval_a: { addr_hex: "003AH", width: "16-bit", direction: "R/W" }
+      interval_b: { addr_hex: "003CH", width: "16-bit", direction: "R/W" }
+      control: { addr_hex: "003EH", width: "16-bit", direction: "R/W" }
+    timer2:
+      counter: { addr_hex: "0040H", width: "16-bit", direction: "R/W" }
+      interval_a: { addr_hex: "0042H", width: "16-bit", direction: "R/W" }
+      control: { addr_hex: "0046H", width: "16-bit", direction: "R/W" }
+    control_bits_emulator:
+      enable_bit: { bit: 15, mask_hex: "8000H", meaning: "Timer enabled" }
+      repeat_bit0_guess: { bit: 0, meaning: "Used in emulator examples; exact semantics TBD" }
+
+  interrupt_and_masking:
+    status: emulator_inferred
+    global_mask:
+      addr_hex: "0008H"
+      width: "8-bit"
+      direction: "R/W"
+      meaning: "Interrupt mask bits (timer, serial, key, etc.)"
+    irq_now:
+      addr_hex: "000CH"
+      width: "8-bit"
+      direction: "R"
+      meaning: "Which sources currently interrupting"
+    end_of_interrupt:
+      addr_hex: "0002H"
+      width: "8-bit"
+      direction: "W"
+      meaning: "EOI acknowledge (emulator uses 0xFF to clear)"
+    controllers_16bit:
+      timer: { addr_hex: "0012H", width: "16-bit", direction: "R/W" }
+      serial: { addr_hex: "0014H", width: "16-bit", direction: "R/W" }
+      card_edge: { addr_hex: "0016H", width: "16-bit", direction: "R/W" }
+      keyboard: { addr_hex: "0018H", width: "16-bit", direction: "R/W" }
+      power_switch: { addr_hex: "001AH", width: "16-bit", direction: "R/W" }
+
+  serial_rs232:
+    status: emulator_inferred
+    ports:
+      baud: { addr_hex: "0060H", width: "16-bit", direction: "R/W" }
+      settings: { addr_hex: "0064H", width: "16-bit", direction: "R/W" }
+      status: { addr_hex: "0066H", width: "16-bit", direction: "R (emulator returns 0x0008 in low byte)" }
+      rx_data: { addr_hex: "0068H", width: "16-bit-ish (bytewise)", direction: "R" }
+      tx_data: { addr_hex: "006AH", width: "16-bit-ish (bytewise)", direction: "W" }
+
+  floppy_or_storage_interface:
+    status: emulator_inferred
+    ports:
+      data: { addr_hex: "02A6H", width: "8-bit", direction: "R" }
+      status: { addr_hex: "02A7H", width: "8-bit", direction: "R" }
+    status_bits_emulator:
+      error: { mask_hex: "01H" }
+      cmd_written_ok: { mask_hex: "02H" }
+      cmd_started: { mask_hex: "04H" }
+      cmd_done: { mask_hex: "08H" }
+      device_ok: { mask_hex: "10H" }
+
+memory_map_emulator_model:
+  status: emulator_inferred
+  address_space:
+    linear_formula: "phys = ((seg << 4) + off) & 0xFFFFF"
+  regions:
+    - { start: "00000H", end: "3FFFFH", kind: "RAM (plus calculator regs)" }
+    - { start: "40000H", end: "9FFFFH", kind: "unmapped (reads return low byte of address; writes ignored)" }
+    - { start: "A0000H", end: "AFFFFH", kind: "LCD/VRAM window (controller model; see below)" }
+    - { start: "B0000H", end: "DFFFFH", kind: "dummy ROM window (reads return low address byte)" }
+    - { start: "E0000H", end: "FFFFFH", kind: "ROM image (mapped from emulator memory[0x40000..])" }
+  special_ram_cells:
+    bcd_math_X: { start: "0400H", end: "0408H", meaning: "Calculator X register (9 bytes BCD-ish)" }
+    bcd_math_Y: { start: "0410H", end: "0418H", meaning: "Calculator Y register (9 bytes)" }
+    bcd_math_W: { start: "0420H", end: "0428H", meaning: "Scratch (emulator uses; not fully characterized)" }
+
+lcd_vram_controller_emulator_model:
+  status: emulator_inferred
+  warning_real_hardware:
+    - "Direct writes to DS=0A000H and accessing [DI]/odd address cycles caused hard freeze on real Z-1GR."
+    - "Treat A0000h VRAM mapping as emulator-specific until verified with safer/known-good method (likely ROM calls or prerequisite setup)."
+  window_base:
+    linear: "A0000H"
+    segment: "0A000H"
+  access_protocol:
+    even_address: "Select Address Register (AR)"
+    odd_address: "Read/write selected target based on AR"
+  ar_meanings_low3bits:
+    "0": "Display memory (pixel/status access)"
+    "1": "X address register (xar)"
+    "2": "Y address register (yar)"
+    "3": "Control register (fcr)"
+    "4": "Mode register (mdr)"
+    "5": "C select register (csr)"
+  display_write_behavior_emulator:
+    notes:
+      - "Bit mapping depends on fcr & 0x40 and other mode bits."
+      - "In one mode, writing a byte affects 6 horizontal pixels (bits 5..0)."
+      - "There are also 'status symbol' bits (CAPS/S/BASIC/DEG/RAD/GRA) multiplexed at certain X positions."
+
+bcd_math_unit:
+  status: emulator_inferred
+  ram_registers:
+    X: { start: "0400H", size_bytes: 9 }
+    Y: { start: "0410H", size_bytes: 9 }
+  operation_port:
+    addr_hex: "0220H"
+    direction: "OUT to execute op; IN to read flags"
+  notes:
+    - "Emulator implements opXY() operating on X/Y BCD format (mantissa/exponent/sign)."
+    - "Exact opcode meanings and BCD format should be validated via ROM/BASIC correlation."
+
+open_questions_next_steps:
+  - id: "lcd_access_real"
+    question: "How does real Z-1GR expose LCD/graphics? Is VRAM memory-mapped at A0000h with prerequisites, or only via ROM calls/I/O?"
+    planned_method:
+      - "Locate ROM call vectors / BIOS dispatcher in emulator sources (not pseudorom.h)."
+      - "Search for code paths that print/draw and observe which ports/segments are touched."
+      - "On-device safe probing: read-only accesses first; avoid writes to A0000h until mechanism known."
+  - id: "timer_confirm"
+    question: "Do timer ports (0030h..0047h) tick on real hardware, and how are interrupts delivered?"
+    planned_method:
+      - "Polling test: read counter repeatedly and observe changes; then attempt enabling with control enable bit."
+      - "If interrupts: verify mask register at 0008h and controller at 0012h."
+  - id: "keyboard_mapping"
+    question: "Map AX bit patterns to physical keys."
+    planned_method:
+      - "Strobe single row bits and log AX for known key presses."
+      - "Build lookup table once mapped."

@@ -1,0 +1,10 @@
+{
+  "PUSHA": {
+    "bytes": ["60"],
+    "comment": "80186 PUSHA (push AX,CX,DX,BX,SP,BP,SI,DI)"
+  },
+  "POPA": {
+    "bytes": ["61"],
+    "comment": "80186 POPA (pop DI,SI,BP,SP(discard),BX,DX,CX,AX)"
+  }
+}

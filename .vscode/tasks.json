@@ -6,6 +6,18 @@
       "type": "shell",
       "command": "python3 tools/send_serial.py ${file} --ctrlz",
       "problemMatcher": []
+    },
+    {
+      "label": "Lint current ASM (z1asm_lint)",
+      "type": "shell",
+      "command": "python3 tools/z1asm_lint.py ${file}",
+      "problemMatcher": []
+    },
+    {
+      "label": "Send preprocessed ASM to Z-1GR",
+      "type": "shell",
+      "command": "python3 tools/z1asm_lint.py ${file} --output /tmp/z1_preprocessed.asm && python3 tools/send_serial.py /tmp/z1_preprocessed.asm --ctrlz",
+      "problemMatcher": []
     }
   ]
 }

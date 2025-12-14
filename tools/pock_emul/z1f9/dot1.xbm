@@ -1,0 +1,5 @@
+#define dot1_width 1
+#define dot1_height 4
+static unsigned char dot1_bits[] = {
+	0x00,0x00,0x01,0x00
+};

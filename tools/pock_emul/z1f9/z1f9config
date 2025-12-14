@@ -1,0 +1,173 @@
+#
+# Z-1/FX-890Pエミュレータ 設定ファイル
+#
+
+# エミュレートするマシン (z1, z1gr, z1gra, fx890p, fx890p_en)
+machine	z1gr
+
+# CPUクロック数 (Hz)
+clock	3686400
+
+# RAM容量 (KB)
+ram_size	256
+
+# ROMイメージのあるディレクトリ
+rom_path	~/z1f9/rom.txt
+
+# RAMイメージのフルパス名
+ram_path	~/z1f9/ram.bin
+
+# シリアル入力のフルパス名
+sio_in	~/z1f9/io/sio_in.txt
+
+# シリアル出力のフルパス名
+sio_out	~/z1f9/io/sio_out.txt
+
+# プリンタ出力のフルパス名
+printer	~/z1f9/io/print.txt
+
+# フロッピーディスクのディレクトリ
+floppy_dir	~/z1f9/disk/
+
+# I/O更新周期(Hz)
+refresh	60
+
+# LCDの倍率
+zoom	3
+
+# LCDの階調数
+lcd_scales	2
+
+# ブザー音を出力するか?
+buzzer	y
+
+# キー (jp)
+!	+1
+"	+2
+hash	+3
+$	+4
+%	+5
+&	+6
+'	+7
+(	+8
+)	+9
+*	+:
++	+;
+,	,
+-	-
+.	.
+/	/
+:	:
+;	;
+<	+,
+=	+-
+>	+.
+?	+/
+@	@
+[	[
+\	\
+]	]
+^	^
+_	+_
+`	+@
+{	+[
+|	+\
+}	+]
+~	+^
+
+# キー (us)
+#!	+1
+#"	+:
+#hash	+3
+#$	+4
+#%	+5
+#&	+7
+#'	:
+#(	+9
+#)	+0
+#*	+8
+#+	+^
+#,	,
+#-	-
+#.	.
+#/	/
+#:	+;
+#;	;
+#<	+,
+#=	^
+#>	+.
+#?	+/
+#@	+2
+#[	@
+#\	]
+#]	[
+#^	+6
+#_	+-
+#`	`
+#{	+@
+#|	+]
+#}	+[
+#~	+`
+
+# キー (de)
+#y	z
+#z	y
+#!	+1
+#"	+2
+#hash	]
+#$	+4
+#%	+5
+#&	+6
+#'	+]
+#(	+8
+#)	+9
+#*	+[
+#+	[
+#,	,
+#-	/
+#.	.
+#/	+7
+#:	+.
+#;	+,
+#<	non-us-backslash
+#=	+0
+#>	+non-us-backslash
+#?	+-
+#@	%q
+#[	%8
+#\	%-
+#]	%9
+#^	`
+#_	+/
+#`	+^
+#{	%7
+#|	%non-us-backslash
+#}	%0
+#~	%[
+
+off	escape
+brk	pause
+2nd	rshift
+srch	^f
+in	^i
+out	^o
+kana	lalt
+menu	f1
+cal	f2
+sqr	^r
+x^2	^p
+eng	^e
+cls	home
+log	^g
+ln	^l
+degr	^d
+sin	^s
+cos	^c
+tan	^t
+mr	^m
+m+	^n+
+ans	^a
+allreset	f8
+copy	^x
+paste	^v
+#trace	f12

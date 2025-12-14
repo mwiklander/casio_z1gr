@@ -1,0 +1,5 @@
+#define rad1_width 8
+#define rad1_height 4
+static unsigned char rad1_bits[] = {
+	0x33,0x55,0x53,0x35
+};

@@ -1,0 +1,5 @@
+#define caps1_width 8
+#define caps1_height 4
+static unsigned char caps1_bits[] = {
+	0x36,0x51,0x31,0x16
+};
