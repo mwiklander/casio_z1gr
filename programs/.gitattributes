@@ -1,0 +1,4 @@
+*.BAS text eol=crlf
+*.bas text eol=crlf
+*.ASM text eol=lf
+*.asm text eol=lf

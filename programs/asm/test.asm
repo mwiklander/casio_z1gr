@@ -1,0 +1,1 @@
+    ORG 20000H    IRET    END    

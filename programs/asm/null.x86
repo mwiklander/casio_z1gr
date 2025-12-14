@@ -1,0 +1,5 @@
+ORG 2000H
+START:
+    MOV AX,0
+    IRET
+END

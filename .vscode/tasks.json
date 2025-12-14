@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Send current file to Z-1GR",
+      "type": "shell",
+      "command": "python3 tools/send_serial.py ${file} --ctrlz",
+      "problemMatcher": []
+    }
+  ]
+}
