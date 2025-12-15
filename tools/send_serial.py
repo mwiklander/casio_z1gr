@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 import argparse
 import os
+import subprocess
 import sys
 import time
+from pathlib import Path
+
 import serial
 
 EOL_MAP = {
@@ -53,19 +56,60 @@ def main():
     ap.add_argument("--ctrlz", action="store_true", help="Send CTRL-Z at end (recommended).")
     ap.add_argument("--eol", default=None, help="Override EOL: CR, LF, or CRLF.")
     ap.add_argument("--raw", action="store_true", help="Send file bytes as-is (no EOL normalization).")
+    ap.add_argument(
+        "--z1ify",
+        dest="z1ify",
+        action="store_true",
+        help="Force running tools/z1asm_lint.py on ASM/CASM sources before sending (default).",
+    )
+    ap.add_argument(
+        "--no-z1ify",
+        dest="z1ify",
+        action="store_false",
+        help="Skip running tools/z1asm_lint.py prior to transfer.",
+    )
+    ap.set_defaults(z1ify=True)
     args = ap.parse_args()
 
-    if not os.path.exists(args.path):
-        print(f"File not found: {args.path}", file=sys.stderr)
+    source_path = Path(args.path)
+
+    if not source_path.exists():
+        print(f"File not found: {source_path}", file=sys.stderr)
         sys.exit(2)
 
     # Read file
     if args.raw:
-        payload = open(args.path, "rb").read()
+        payload = source_path.read_bytes()
     else:
-        # Read as text, but keep it strict-ish: you want to know if non-ASCII sneaks in
-        text = open(args.path, "r", encoding="ascii", errors="strict").read()
-        eol = choose_eol(args.path, args.eol)
+        linted_text: str | None = None
+        ext = source_path.suffix.lower()
+        if args.z1ify and ext in {".asm", ".casm"}:
+            lint_script = Path(__file__).with_name("z1asm_lint.py")
+            if lint_script.exists():
+                proc = subprocess.run(
+                    [sys.executable, str(lint_script), str(source_path), "--stdout"],
+                    capture_output=True,
+                    text=True,
+                )
+                if proc.stderr:
+                    sys.stderr.write(proc.stderr)
+                if proc.returncode != 0:
+                    print("z1asm_lint.py reported errors; aborting transfer.", file=sys.stderr)
+                    sys.exit(proc.returncode)
+                linted_text = proc.stdout
+            else:
+                print(
+                    "Warning: tools/z1asm_lint.py not found; sending original source without preprocessing.",
+                    file=sys.stderr,
+                )
+
+        if linted_text is None:
+            # Read as text, but keep it strict-ish: you want to know if non-ASCII sneaks in
+            text = source_path.read_text(encoding="ascii", errors="strict")
+        else:
+            text = linted_text
+
+        eol = choose_eol(str(source_path), args.eol)
         text = normalize_text_for_z1(text, eol)
         payload = text.encode("ascii")
 
@@ -81,7 +125,7 @@ def main():
             ser.flush()
         else:
             # Pace by line terminator used
-            eol = choose_eol(args.path, args.eol)
+            eol = choose_eol(str(source_path), args.eol)
             sep = eol.encode("ascii")
             parts = payload.split(sep)
             # split() drops terminators, so add them back

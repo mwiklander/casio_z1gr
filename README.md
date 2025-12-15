@@ -13,14 +13,14 @@ Experiments, tooling, and notes for driving machine-language routines on the Cas
 ## Quick Start
 
 1. Install VS Code’s x86 assembly grammar (`13xforever.language-x86-64-assembly`) for highlighting.
-2. Run `python3 tools/z1asm_lint.py path/to/file.asm --write-sibling` to normalise assembler quirks (hex prefixes, unsupported `OUT DX,AH`, missing `END`).
-3. Send the `_z1` sibling to the device with `python3 tools/send_serial.py file_z1.asm --ctrlz` or the “Send preprocessed ASM to Z-1GR” VS Code task.
+2. Either let `send_serial.py` do the preprocessing for you (default) or run `python3 tools/z1asm_lint.py path/to/file.asm --write-sibling` yourself to normalise assembler quirks (hex prefixes, unsupported `OUT DX,AH`, missing `END`).
+3. Send the source with `python3 tools/send_serial.py path/to/file.asm --ctrlz` (the script auto-runs the linter unless you opt out with `--no-z1ify`), or use the “Send preprocessed ASM to Z-1GR” VS Code task.
 4. On the calculator, allocate ML space (`CLEAR 2048,2048,6014`) and launch with `CALL &H2000` (or your chosen `ORG`).
 
 ## Tooling Highlights
 
 - `tools/z1asm_lint.py` – Lints, rewrites unsupported syntax, appends `END`, and can emit an `_z1` sibling. Extend `tools/z1asm_opcodes.json` for missing mnemonics (e.g., `PUSHA`, `POPA`).
-- `tools/send_serial.py` – Normalises line endings (CR for ASM) and streams content over USB serial with optional CTRL-Z terminator.
+- `tools/send_serial.py` – Normalises line endings (CR for ASM), runs `z1asm_lint.py` automatically for ASM/CASM sources (toggle with `--[no-]z1ify`), and streams content over USB serial with optional CTRL-Z terminator.
 - `.vscode/tasks.json` – Includes lint-only and preprocess+send tasks wired to the scripts above.
 
 ## Further Reading
